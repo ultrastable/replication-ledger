@@ -1,0 +1,25 @@
+// Copy of the config the platform renders (python3 -m foundation system --render in ultrastable/ultrastable). The platform deploys; this is for reference.
+{
+  "name": "ultrastable-replication-ledger",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "23 * * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ultrastable-replication-ledger",
+      "database_id": "c59cdeca-7f57-4edd-ac7e-256ab07fab57"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  }
+}
