@@ -10,7 +10,6 @@ import { standing } from "./standing.js";
 import { doiKey } from "./ledger.js";
 import { BEAT, checkFinding, discoverFindings } from "./discover.js";
 import { lookup, check } from "./crossref.js";
-import { step as graphStep } from "./graph.js";
 
 export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS findings (id TEXT PRIMARY KEY, body TEXT NOT NULL, found_at TEXT NOT NULL)`,
@@ -19,8 +18,7 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS checks (finding_id TEXT PRIMARY KEY, checked_at TEXT NOT NULL, openalex TEXT, retracted INTEGER NOT NULL DEFAULT 0, cited_by INTEGER)`,
   `CREATE TABLE IF NOT EXISTS cites (doi TEXT PRIMARY KEY, ok INTEGER NOT NULL, issues TEXT NOT NULL, checked_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS standing_changes (at TEXT NOT NULL, finding_id TEXT NOT NULL, from_st TEXT, to_st TEXT NOT NULL, doi TEXT, outcome TEXT)`,
-  `CREATE TABLE IF NOT EXISTS beats (n INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, ended_at TEXT, trigger TEXT, checked INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, leads INTEGER DEFAULT 0, findings INTEGER DEFAULT 0, cites INTEGER DEFAULT 0, errors TEXT DEFAULT '[]')`,
-  `CREATE TABLE IF NOT EXISTS kg_leads (src TEXT NOT NULL, dst TEXT NOT NULL, score REAL, why TEXT, first_seen TEXT NOT NULL, outcome TEXT NOT NULL DEFAULT 'open', settled_at TEXT, PRIMARY KEY (src, dst))`
+  `CREATE TABLE IF NOT EXISTS beats (n INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, ended_at TEXT, trigger TEXT, checked INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0, leads INTEGER DEFAULT 0, findings INTEGER DEFAULT 0, cites INTEGER DEFAULT 0, errors TEXT DEFAULT '[]')`
 ];
 
 const ready = new WeakMap();
@@ -33,18 +31,17 @@ const all = async (db, sql, ...b) => (await db.prepare(sql).bind(...b).all()).re
 // The ledger as served: seed plus everything discovered, with per-finding live facts. Without a database it is the seed alone.
 export async function load(env) {
   const base = structuredClone(seed);
-  const live = { beat: null, beats: [], checks: {}, changes: [], leads: 0, cites: {}, kg_leads: [] };
+  const live = { beat: null, beats: [], checks: {}, changes: [], leads: 0, cites: {} };
   if (!env?.DB) return { ledger: base, live };
   await ensure(env.DB);
-  const [fs, at, ck, ch, bt, ld, ct, kg] = await Promise.all([
+  const [fs, at, ck, ch, bt, ld, ct] = await Promise.all([
     all(env.DB, "SELECT body FROM findings ORDER BY found_at"),
     all(env.DB, "SELECT finding_id, body FROM attempts ORDER BY found_at"),
     all(env.DB, "SELECT * FROM checks"),
     all(env.DB, "SELECT * FROM standing_changes ORDER BY at DESC LIMIT 100"),
     all(env.DB, "SELECT * FROM beats WHERE ended_at IS NOT NULL ORDER BY n DESC LIMIT 24"),
     all(env.DB, "SELECT COUNT(*) AS n FROM leads"),
-    all(env.DB, "SELECT * FROM cites"),
-    all(env.DB, "SELECT * FROM kg_leads ORDER BY first_seen DESC LIMIT 500")]);
+    all(env.DB, "SELECT * FROM cites")]);
   for (const r of fs) { const f = JSON.parse(r.body); if (!base.findings.some(x => x.id === f.id)) base.findings.push(f); }
   const byId = Object.fromEntries(base.findings.map(f => [f.id, f]));
   for (const r of at) {
@@ -53,7 +50,7 @@ export async function load(env) {
   }
   for (const c of ck) live.checks[c.finding_id] = c;
   for (const c of ct) live.cites[c.doi] = c;
-  Object.assign(live, { beat: bt[0] || null, beats: bt, changes: ch, leads: ld[0]?.n || 0, kg_leads: kg });
+  Object.assign(live, { beat: bt[0] || null, beats: bt, changes: ch, leads: ld[0]?.n || 0 });
   return { ledger: base, live };
 }
 
@@ -108,14 +105,6 @@ export async function beat(env, { trigger = "cron", fetchImpl = fetch, now = new
       tally.cites++;
     } catch (e) { errors.push(`crossref ${c.doi}: ${String(e.message || e).slice(0, 120)}`); }
   }
-  try {  // DATAGRAPH-1: settle the graph's open link leads against the data as it is now, and propose new ones
-    const { ledger: ledgerNow, live: liveNow } = await load(env);
-    const { settled, fresh } = graphStep(ledgerNow, liveNow.kg_leads, now);
-    const st = [...settled.map(l => db.prepare("UPDATE kg_leads SET outcome = ?, settled_at = ? WHERE src = ? AND dst = ?").bind(l.outcome, now, l.src, l.dst)),
-      ...fresh.map(l => db.prepare("INSERT OR IGNORE INTO kg_leads (src, dst, score, why, first_seen, outcome) VALUES (?, ?, ?, ?, ?, 'open')").bind(l.src, l.dst, l.score, l.why, now))];
-    if (st.length) await db.batch(st);
-    tally.graph = { settled: settled.length, proposed: fresh.length };
-  } catch (e) { errors.push(`graph: ${String(e.message || e).slice(0, 160)}`); }
   await db.prepare("UPDATE beats SET ended_at = ?, checked = ?, attempts = ?, leads = ?, findings = ?, cites = ?, errors = ? WHERE n = ?")
     .bind(new Date().toISOString(), tally.checked, tally.attempts, tally.leads, tally.findings, tally.cites, JSON.stringify(errors), n).run();
   return { n, ...tally, errors };
