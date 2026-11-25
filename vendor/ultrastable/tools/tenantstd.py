@@ -175,17 +175,25 @@ def identity(slug: str, tenant: Path, std: dict, root: Path) -> dict:
     tagline = str((inst.get("brand") or {}).get("tagline") or row.get("description") or name)
     dep, url = deployment(slug, root)
     worker = row.get("worker") or f"ultrastable-{slug}"
-    host = std["scaffold"]["defaults"]["host"].replace("{slug}", slug)
+    topo = next((w for w in (_json(root / "doctrine/topology.json") or {}).get("workers", []) if w.get("id") == worker), {})
     return {
         "name": name, "slug": slug,
         "summary": re.sub(r"\s*Run on Ultrastable, the foundation for any autonomous system\.?\s*$", "", tagline).strip(),
         "repo": row.get("repo") or f"{std['core_repo'].split('/')[0]}/{slug}",
-        "public_url": url if dep else None, "planned_url": None if dep else f"https://{host}",
-        "license": "LicenseRef-Ultrastable-USL-1.0",
-        "topics": sorted({"ultrastable", "autonomous-system", "cloudflare-workers", *(row.get("topics") or [])}),
-        "layer": "tenant",
-        "runs_as": {"platform": "cloudflare-workers", "worker": worker, "deployed": dep, "deployed_from": "main", "deployed_by": f"{std['core_repo']} deploy-ultrastable"},
+        "public_url": url if dep else None,
+        "license": "LicenseRef-Ultrastable-USL-1.0", "topics": ["ultrastable"], "layer": "tenant", "parent": std["core_repo"],
+        "visibility": row.get("visibility", "public"), "visibility_reason": "DISCOVER-1: public by default",
+        "status": "live" if dep else row.get("state", "planned"),
+        "runs_as": [{"provider": "cloudflare", "kind": "worker", "name": worker, "routes": topo.get("routes") or [],
+                     "how": "deployed from this repository's `main` by the Ultrastable platform"}] if dep else [],
     }
+
+
+def worker_of(ident: dict, slug: str) -> str:
+    """The Worker an identity names (runs_as is a list of where it runs; empty while nothing is deployed), else the platform's name for the slug."""
+    ra = ident.get("runs_as")
+    first = (ra[0] if isinstance(ra, list) and ra else ra) or {}
+    return (first.get("name") or first.get("worker") if isinstance(first, dict) else None) or f"ultrastable-{slug}"
 
 
 def check_tenant(tenant: Path, std: dict | None = None, root: Path | None = None) -> list[str]:
@@ -218,10 +226,10 @@ def check_tenant(tenant: Path, std: dict | None = None, root: Path | None = None
         bad += [f"identity: ultrastable.json identity has no `{k}`" for k in std["identity"]["keys"] if k not in ident]
         if ident.get("slug") != slug:
             bad.append(f"identity: ultrastable.json says slug {ident.get('slug')!r}; instance.json says {slug!r}")
-        if (ident.get("runs_as") or {}).get("worker") != sub["worker"]:
-            bad.append(f"identity: ultrastable.json runs_as.worker should be {sub['worker']}")
-        if root is not None and slug in (_json(root / REG) or {}).get("tenants", {}) and ident != identity(slug, tenant, std, root):
-            bad.append("identity: ultrastable.json identity differs from what the registries say; run python3 -m foundation tenantstd --scaffold on this repository")
+        if worker_of(ident, slug) != sub["worker"]:
+            bad.append(f"identity: ultrastable.json runs_as names {worker_of(ident, slug)}; the platform runs this tenant as {sub['worker']}")
+        if root is not None and slug in (_json(root / REG) or {}).get("tenants", {}) and (ident.get("public_url") or "").rstrip("/") != deployment(slug, root)[1]:
+            bad.append(f"identity: ultrastable.json public_url is {ident.get('public_url')}; the registries say {deployment(slug, root)[1] or 'not deployed'}")
     lc, rw, pkg = _json(tenant / "lifecycle.json") or {}, _json(tenant / "runway.json") or {}, _json(tenant / "package.json") or {}
     if lc:
         unanswered = [c for c in std["survival"] if not ((lc.get("survival") or {}).get(c) or {}).keys() & {"inherit", "status"}]
@@ -311,12 +319,14 @@ def context(slug: str, tenant: Path, std: dict, root: Path | None, ident: dict |
     """The values every template is rendered with: the identity (the one input object) plus the tenant's declared options and platform rows."""
     ident = ident or identity(slug, tenant, std, root)
     row = (_json(root / REG) or {}).get("tenants", {}).get(slug, {}) or {}
-    topo = next((w for w in (_json(root / "doctrine/topology.json") or {}).get("workers", []) if w.get("id") == ident["runs_as"]["worker"]), {})
+    worker = worker_of(ident, slug)
+    topo = next((w for w in (_json(root / "doctrine/topology.json") or {}).get("workers", []) if w.get("id") == worker), {})
     sysd = _json(root / "doctrine/system.json") or {}
     d, opt = std["scaffold"]["defaults"], row.get("scaffold") or {}
     hours, h = int(opt.get("beat_hours", d["beat_hours"])), zlib.crc32(slug.encode())
     return {
-        "slug": slug, "name": ident["name"], "summary": ident["summary"], "repo": ident["repo"], "worker": ident["runs_as"]["worker"],
+        "slug": slug, "name": ident["name"], "summary": ident["summary"], "repo": ident["repo"], "worker": worker,
+        "planned_url": "https://" + d["host"].replace("{slug}", slug),
         "d1": f"ultrastable-{slug}", "d1_id": ((sysd.get("resources") or {}).get("d1") or {}).get(slug, {}).get("id", ""),
         "beat_hours": hours, "cron": (topo.get("crons") or [_cron(slug, hours)])[0], "noun": opt.get("noun", d["noun"]),
         "ai": bool(row.get("ai")), "compatibility_date": topo.get("compatibility_date") or d["compatibility_date"],
@@ -347,7 +357,10 @@ def scaffold(tenant: Path, slug: str, root: Path | None = None, std: dict | None
     if root is None:
         raise SystemExit("tenantstd: the scaffold runs from the core repository (its templates live in scaffold/tenant)")
     tenant, done = Path(tenant), []
-    ident = ident or identity(slug, tenant, std, root)
+    # the identity is the scaffold's one input: the caller's, else the one the repository already carries (the fleet's reconciler,
+    # seed/scripts/surfaces.py, owns its values), else computed from the registries for a repository that has none yet
+    have = (_json(tenant / "ultrastable.json") or {}).get("identity")
+    ident = ident or (have if isinstance(have, dict) and have.get("slug") == slug else None) or identity(slug, tenant, std, root)
     sc, ctx = std["scaffold"], context(slug, tenant, std, root, ident)
     ctx["live_block"] = live_block(slug, root)
     tdir, fresh = root / sc["dir"], not (tenant / "worker/index.js").exists()
@@ -393,6 +406,9 @@ def scaffold(tenant: Path, slug: str, root: Path | None = None, std: dict | None
             put(rel, json.dumps(new, indent=2, ensure_ascii=False) + "\n", "set keys in")
     for src, dst in sc["copy"].items():
         put(dst, (root / src).read_text(encoding="utf-8"), "copied")
+    for src, dst in (sc.get("copy_if_missing") or {}).items():
+        if not (tenant / dst).exists():
+            put(dst, (root / src).read_text(encoding="utf-8"), "copied")
     if not (tenant / "wrangler.jsonc").exists():
         put("wrangler.jsonc", wrangler(ctx), "wrote")
     lc = _json(tenant / "lifecycle.json")
@@ -436,9 +452,9 @@ def check_core(root: Path | None = None, std: dict | None = None) -> list[str]:
     for f in sc["files"]:
         if not (root / sc["dir"] / (f["path"] + ".tmpl")).is_file():
             bad.append(f"{sc['dir']}/{f['path']}.tmpl: the scaffold has no template for this standard file")
-    scaffolded = {f["path"] for f in sc["files"]} | set(sc["copy"].values()) | set(sc["generated"]) | {"IDEA.md", "instance.json"}
+    scaffolded = {f["path"] for f in sc["files"]} | set(sc["copy"].values()) | set((sc.get("copy_if_missing") or {}).values()) | set(sc["generated"]) | {"IDEA.md", "instance.json"}
     bad += [f"{STD_CORE}: standard file {f['path']} is written by no part of the scaffold" for f in std["files"] if f["path"] not in scaffolded]
-    for src in list(std["vendor"]["base"]) + list(sc["copy"]):
+    for src in list(std["vendor"]["base"]) + list(sc["copy"]) + list(sc.get("copy_if_missing") or {}):
         if not (root / src).is_file():
             bad.append(f"{STD_CORE}: names {src}, which is not in the core")
     for slug, t in tenants(root, std).items():
