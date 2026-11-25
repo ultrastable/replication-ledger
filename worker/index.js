@@ -8,13 +8,13 @@ import { withStandings, FIELDS } from "./ledger.js";
 import { KINDS, OUTCOMES, STANDINGS, RUBRIC } from "./standing.js";
 import { BEAT } from "./discover.js";
 import { load, beat, freshness, minutesSince } from "./store.js";
+import { graphTick, graphApi, graphView } from "./graph.js";
 import { home, fieldPage, findingPage, projectsPage, rubricPage, changesPage, graphPage, notFound, SITE } from "./site.js";
-import { report as graphReport, node as graphNode, search as graphSearch } from "./graph.js";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body, null, 1), { status, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } });
 const html = (body, status = 200) => new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
 
-export function route(url, ledger = seed, live = { checks: {}, beats: [], changes: [], cites: {}, kg_leads: [] }) {
+export function route(url, ledger = seed, live = { checks: {}, beats: [], changes: [], cites: {} }) {
   const u = new URL(url);
   const p = u.pathname.replace(/\/+$/, "") || "/";
   const all = withStandings(ledger);
@@ -27,19 +27,6 @@ export function route(url, ledger = seed, live = { checks: {}, beats: [], change
   if (p === "/api/freshness") { const fr = freshness(ledger, live); return json(fr, fr.ok ? 200 : 503); }
   if (p === "/api/beats") return json({ beats: live.beats.map(b => ({ ...b, errors: JSON.parse(b.errors || "[]") })) });
   if (p === "/api/citations") return json({ checked: Object.keys(live.cites).length, failed: Object.values(live.cites).filter(c => !c.ok).map(c => ({ doi: c.doi, issues: JSON.parse(c.issues) })) });
-  if (p === "/api/graph") { const { graph, ...r } = graphReport(ledger, live.kg_leads || []); return json({ ...r.analysis, leads: r.leads }); }
-  if (p === "/api/graph/insights") { const r = graphReport(ledger, live.kg_leads || []); return json({ insights: r.insights, leads: r.leads }); }
-  if (p === "/api/graph/search") {
-    const q = (u.searchParams.get("q") || "").trim().toLowerCase();
-    if (q.length < 2) return json({ error: "query too short", code: "query_too_short", hint: "use ?q= with at least two characters" }, 400);
-    const hits = graphSearch(ledger, q);
-    return json({ q, count: hits.length, nodes: hits });
-  }
-  if (p === "/api/graph/node") {
-    const id = u.searchParams.get("id") || "";
-    const n = graphNode(ledger, id);
-    return n.nodes.length ? json(n) : json({ error: "not_found", code: "node_not_found", hint: "ids look like finding:ego-depletion or paper:10.1037/..." }, 404);
-  }
   if (p === "/api/rubric") return json({ kinds: KINDS, outcomes: OUTCOMES, standings: STANDINGS, rubric: RUBRIC });
   if (p === "/api/findings") {
     const field = u.searchParams.get("field");
@@ -62,13 +49,15 @@ export function route(url, ledger = seed, live = { checks: {}, beats: [], change
   if (p === "/rubric") return html(rubricPage());
   if (p === "/projects") return html(projectsPage(ledger.projects || []));
   if (p === "/changes") return html(changesPage(live.changes, live.beats, ledger));
-  if (p === "/graph") return html(graphPage(graphReport(ledger, live.kg_leads || [])));
+  if (p === "/graph") return html(graphPage(live.graph || null));
   if (p.startsWith("/field/")) { const id = p.slice(7); return FIELDS[id] && all.some(f => f.field === id) ? html(fieldPage(id, all)) : html(notFound(), 404); }
   if (p.startsWith("/f/")) { const f = all.find(x => x.id === p.slice(3)); return f ? html(findingPage(f, live)) : html(notFound(), 404); }
   return html(notFound(), 404);
 }
 
-const runBeat = (env, trigger) => beat(env, { trigger }).catch(e => console.error("beat failed", e?.message || e));
+// After each beat the knowledge graph is rebuilt from the ledger as it now stands (KGRAPH-1, graph.js).
+const runBeat = (env, trigger) => beat(env, { trigger }).catch(e => console.error("beat failed", e?.message || e))
+  .then(async r => { try { const { ledger } = await load(env); await graphTick(env.DB, ledger); } catch (e) { console.error("graph failed", e?.message || e); } return r; });
 
 export default {
   async fetch(req, env, ctx) {
@@ -80,7 +69,9 @@ export default {
       const r = age != null && age <= BEAT.SPARK_MIN ? { skipped: "the last beat is recent", last_beat_minutes: age } : await beat(env, { trigger: "watch" }).catch(e => ({ error: String(e?.message || e) }));
       return new Response(JSON.stringify({ ok: !r.error, ...r }), { status: r.error ? 500 : 200, headers: { "content-type": "application/json" } });
     }
-    else if (env?.DB && (age == null || age > BEAT.SPARK_MIN)) ctx?.waitUntil?.(runBeat(env, "spark"));
+    if (env?.DB && new URL(req.url).pathname.startsWith("/api/graph")) return graphApi(req, env.DB);
+    if (env?.DB && new URL(req.url).pathname.replace(/\/+$/, "") === "/graph") live.graph = await graphView(env.DB).catch(e => (console.error("graph view failed", e?.message || e), null));
+    if (env?.DB && (age == null || age > BEAT.SPARK_MIN)) ctx?.waitUntil?.(runBeat(env, "spark"));
     return route(req.url, ledger, live);
   },
   async scheduled(_ev, env, ctx) { ctx.waitUntil(runBeat(env, "cron")); }
