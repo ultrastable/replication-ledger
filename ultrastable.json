@@ -1,0 +1,24 @@
+{
+ "identity": {
+  "name": "Replication Ledger",
+  "slug": "replication-ledger",
+  "summary": "Replication Ledger: which landmark findings held up and which failed, across many fields, updated as replications publish.",
+  "repo": "ultrastable/replication-ledger",
+  "public_url": "https://replication-ledger.ultrastable.org",
+  "planned_url": null,
+  "license": "LicenseRef-Ultrastable-USL-1.0",
+  "topics": [
+   "autonomous-system",
+   "cloudflare-workers",
+   "ultrastable"
+  ],
+  "layer": "tenant",
+  "runs_as": {
+   "platform": "cloudflare-workers",
+   "worker": "ultrastable-replication-ledger",
+   "deployed": true,
+   "deployed_from": "main",
+   "deployed_by": "ultrastable/ultrastable deploy-ultrastable"
+  }
+ }
+}

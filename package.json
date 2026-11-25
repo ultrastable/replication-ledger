@@ -2,7 +2,7 @@
   "name": "replication-ledger",
   "private": true,
   "type": "module",
-  "description": "Replication Ledger: which landmark findings held up and which failed, across many fields. A tenant system running on Ultrastable.",
+  "description": "Replication Ledger: which landmark findings held up and which failed, across many fields, updated as replications publish.",
   "scripts": {
     "test": "node --test --no-warnings worker/*.test.mjs",
     "validate": "node worker/cli.mjs validate",

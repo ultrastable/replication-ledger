@@ -3,20 +3,21 @@
  "slug": "replication-ledger",
  "build": {
   "paths": [
-   "instances/replication-ledger/worker/index.js",
-   "instances/replication-ledger/worker/site.js",
-   "instances/replication-ledger/worker/ledger.js",
-   "instances/replication-ledger/worker/standing.js",
-   "instances/replication-ledger/worker/store.js",
-   "instances/replication-ledger/worker/discover.js",
-   "instances/replication-ledger/worker/crossref.js",
-   "instances/replication-ledger/worker/cli.mjs",
-   "instances/replication-ledger/worker/data/findings.json"
+   "worker/index.js",
+   "worker/site.js",
+   "worker/ledger.js",
+   "worker/standing.js",
+   "worker/store.js",
+   "worker/discover.js",
+   "worker/crossref.js",
+   "worker/cli.mjs",
+   "worker/data/findings.json"
   ],
   "tests": [
-   "instances/replication-ledger/worker/ledger.test.mjs",
-   "instances/replication-ledger/worker/discover.test.mjs"
-  ]
+   "worker/ledger.test.mjs",
+   "worker/discover.test.mjs"
+  ],
+  "repo": "ultrastable/replication-ledger"
  },
  "deploy": {
   "worker": "ultrastable-replication-ledger"
