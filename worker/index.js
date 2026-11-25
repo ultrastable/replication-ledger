@@ -9,6 +9,8 @@ import { KINDS, OUTCOMES, STANDINGS, RUBRIC } from "./standing.js";
 import { BEAT } from "./discover.js";
 import { load, beat, freshness, minutesSince } from "./store.js";
 import { graphTick, graphApi, graphView } from "./graph.js";
+import { contractRoute } from "../vendor/ultrastable/contract.js";
+import { SPEC, socialQueue } from "./contract.js";
 import { home, fieldPage, findingPage, projectsPage, rubricPage, changesPage, graphPage, notFound, SITE } from "./site.js";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body, null, 1), { status, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } });
@@ -18,6 +20,9 @@ export function route(url, ledger = seed, live = { checks: {}, beats: [], change
   const u = new URL(url);
   const p = u.pathname.replace(/\/+$/, "") || "/";
   const all = withStandings(ledger);
+  const c = contractRoute(p, SPEC);  // FLEET-CONTRACT-1: /.well-known/ultrastable.json and /claims.json
+  if (c) return c;
+  if (p === "/social-queue.json") return json(socialQueue(ledger.findings, live.now || Date.now()));  // TENANT-PROMO-1
   if (p === "/health") {
     const fr = freshness(ledger, live);
     return json({ ok: true, findings: ledger.findings.length, attempts: all.reduce((n, f) => n + f.standing.attempts, 0),
@@ -48,7 +53,7 @@ export function route(url, ledger = seed, live = { checks: {}, beats: [], change
   if (p === "/") return html(home(all, ledger.projects || [], live));
   if (p === "/rubric") return html(rubricPage());
   if (p === "/projects") return html(projectsPage(ledger.projects || []));
-  if (p === "/changes") return html(changesPage(live.changes, live.beats, ledger));
+  if (p === "/changes") return html(changesPage(live.changes, live.beats, ledger, live.cites));
   if (p === "/graph") return html(graphPage(live.graph || null));
   if (p.startsWith("/field/")) { const id = p.slice(7); return FIELDS[id] && all.some(f => f.field === id) ? html(fieldPage(id, all)) : html(notFound(), 404); }
   if (p.startsWith("/f/")) { const f = all.find(x => x.id === p.slice(3)); return f ? html(findingPage(f, live)) : html(notFound(), 404); }
