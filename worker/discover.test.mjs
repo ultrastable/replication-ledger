@@ -88,7 +88,9 @@ test("one beat files the attempt, keeps the lead, adds the finding, logs the mov
   const r = await beat(env, { fetchImpl: fakeFetch(), now: "2026-11-25T16:00:00.000Z" });
   assert.deepEqual(r.errors, []);
   assert.equal(r.findings, 1);
+  assert.ok(r.graph.proposed > 0, "the beat proposes knowledge-graph leads");
   let { ledger, live } = await load(env);
+  assert.equal(live.kg_leads.length, r.graph.proposed);
   const ego = ledger.findings.find(f => f.id === "ego-depletion");
   assert.ok(ego.replications.some(a => a.machine && a.cite.doi === "10.9999/new-rep"));
   assert.ok(ledger.findings.some(f => f.id === "pratfall-advantage-interpersonal-attraction"));

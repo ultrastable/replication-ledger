@@ -42,9 +42,9 @@ function shell(title, desc, inner, { path = "/", script = "" } = {}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}"><link rel="canonical" href="${SITE}${esc(path)}">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><style>${CSS}</style></head>
-<body><header class="top"><nav aria-label="Main"><a class="brand" href="/">Replication&nbsp;<span>Ledger</span></a><a href="/#fields">Fields</a><a href="/projects">Replication projects</a><a href="/changes">What changed</a><a href="/rubric">How standings work</a></nav></header>
+<body><header class="top"><nav aria-label="Main"><a class="brand" href="/">Replication&nbsp;<span>Ledger</span></a><a href="/#fields">Fields</a><a href="/projects">Replication projects</a><a href="/changes">What changed</a><a href="/graph">Connections</a><a href="/rubric">How standings work</a></nav></header>
 <main>${inner}</main><footer><div>Guess whether a textbook finding survived replication, then see the record. Every standing is computed from the replication attempts on file, never typed by hand. The ledger searches for new replications and new landmark findings every hour by itself.
-Runs on <a href="https://ultrastable.io/">Ultrastable</a>, the foundation for any autonomous system. No cookies, no trackers. Data: <a href="/api/findings">/api/findings</a> · <a href="/feed.json">/feed.json</a> · <a href="/api/rubric">/api/rubric</a></div></footer>${script}</body></html>`;
+Runs on <a href="https://ultrastable.io/">Ultrastable</a>, the foundation for any autonomous system. No cookies, no trackers. Data: <a href="/api/findings">/api/findings</a> · <a href="/feed.json">/feed.json</a> · <a href="/api/rubric">/api/rubric</a> · <a href="/api/graph">/api/graph</a></div></footer>${script}</body></html>`;
 }
 
 const ago = m => m == null ? "not yet" : m < 1 ? "just now" : m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
@@ -139,4 +139,22 @@ export function changesPage(changes, beats, ledger) {
     `<p class="small"><a href="/">Ledger</a></p><h1>What changed</h1><p class="lede">Every hour the ledger searches for new replications of the findings it holds and for landmark findings it does not hold yet. Each standing it moved is listed here.</p>
 <h2>Standings that moved</h2>${moves ? `<div class="wrap"><table><thead><tr><th>When (UTC)</th><th>Finding</th><th>Move</th><th>Because of</th></tr></thead><tbody>${moves}</tbody></table></div>` : `<p class="muted">No standing has moved yet.</p>`}
 <h2>Recent searches</h2>${bt ? `<div class="wrap"><table><thead><tr><th>Started (UTC)</th><th>Findings checked</th><th>Attempts filed</th><th>Leads kept</th><th>New findings</th><th>Errors</th></tr></thead><tbody>${bt}</tbody></table></div>` : `<p class="muted">The first search has not run yet.</p>`}`, { path: "/changes" });
+}
+
+// DATAGRAPH-1: the knowledge graph of the ledger (graph.js), read on every request from the same data the pages show.
+const nodeLink = (id, label) => { const [k, ...rest] = String(id).split(":"); const v = rest.join(":");
+  return k === "finding" ? `<a href="/f/${esc(v)}">${esc(label)}</a>` : k === "paper" ? `<a href="https://doi.org/${esc(v)}">${esc(label)}</a>` : k === "field" ? `<a href="/field/${esc(v)}">${esc(label)}</a>` : esc(label); };
+export function graphPage(r) {
+  const a = r.analysis, kinds = Object.entries(a.by_kind).map(([k, b]) => `<tr><td>${esc(k)}</td><td>${b.nodes}</td><td>${b.orphans}</td></tr>`).join("");
+  const hubs = a.hubs.map(h => `<li>${nodeLink(h.id, h.label)} <span class="small muted">(${esc(h.kind)}, ${h.degree} links)</span></li>`).join("");
+  const bridges = a.bridges.slice(0, 8).map(b => `<li>${nodeLink(b.id, b.label)} <span class="small muted">(${esc(b.kind)}, joins ${b.communities} clusters)</span></li>`).join("");
+  const ins = r.insights.slice(0, 10).map(i => `<li>${esc(i.text)}</li>`).join("");
+  return shell("Connections · Replication Ledger", "How the findings, papers, authors and replication tests in the ledger connect.",
+    `<p class="small"><a href="/">Ledger</a></p><h1>Connections</h1><p class="lede">Every field, finding, paper, author and replication test in the ledger is a point in one graph. Shared authors and shared papers link findings across fields. The graph is rebuilt from the data on every request.</p>
+<div class="stats"><div><b>${a.nodes}</b>records</div><div><b>${a.edges}</b>links</div><div><b>${a.communities.length}</b>clusters</div><div><b>${r.leads.kept}</b>leads confirmed</div></div>
+<h2>Most connected</h2><ol>${hubs}</ol>
+${bridges ? `<h2>Bridges between clusters</h2><ul>${bridges}</ul>` : ""}
+<h2>What the graph suggests</h2>${ins ? `<ul>${ins}</ul>` : `<p class="muted">Nothing stands out yet.</p>`}
+<p class="small muted">A suggested link is a lead, not a fact. The hourly search keeps it only if the data later links the pair, and drops it after 14 days. ${r.leads.open} open, ${r.leads.kept} kept, ${r.leads.dropped} dropped.</p>
+<h2>By kind</h2><div class="wrap"><table><thead><tr><th>Kind</th><th>Records</th><th>Linked to nothing</th></tr></thead><tbody>${kinds}</tbody></table></div>`, { path: "/graph" });
 }

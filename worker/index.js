@@ -8,12 +8,13 @@ import { withStandings, FIELDS } from "./ledger.js";
 import { KINDS, OUTCOMES, STANDINGS, RUBRIC } from "./standing.js";
 import { BEAT } from "./discover.js";
 import { load, beat, freshness, minutesSince } from "./store.js";
-import { home, fieldPage, findingPage, projectsPage, rubricPage, changesPage, notFound, SITE } from "./site.js";
+import { home, fieldPage, findingPage, projectsPage, rubricPage, changesPage, graphPage, notFound, SITE } from "./site.js";
+import { report as graphReport, node as graphNode, search as graphSearch } from "./graph.js";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body, null, 1), { status, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } });
 const html = (body, status = 200) => new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
 
-export function route(url, ledger = seed, live = { checks: {}, beats: [], changes: [], cites: {} }) {
+export function route(url, ledger = seed, live = { checks: {}, beats: [], changes: [], cites: {}, kg_leads: [] }) {
   const u = new URL(url);
   const p = u.pathname.replace(/\/+$/, "") || "/";
   const all = withStandings(ledger);
@@ -26,6 +27,19 @@ export function route(url, ledger = seed, live = { checks: {}, beats: [], change
   if (p === "/api/freshness") { const fr = freshness(ledger, live); return json(fr, fr.ok ? 200 : 503); }
   if (p === "/api/beats") return json({ beats: live.beats.map(b => ({ ...b, errors: JSON.parse(b.errors || "[]") })) });
   if (p === "/api/citations") return json({ checked: Object.keys(live.cites).length, failed: Object.values(live.cites).filter(c => !c.ok).map(c => ({ doi: c.doi, issues: JSON.parse(c.issues) })) });
+  if (p === "/api/graph") { const { graph, ...r } = graphReport(ledger, live.kg_leads || []); return json({ ...r.analysis, leads: r.leads }); }
+  if (p === "/api/graph/insights") { const r = graphReport(ledger, live.kg_leads || []); return json({ insights: r.insights, leads: r.leads }); }
+  if (p === "/api/graph/search") {
+    const q = (u.searchParams.get("q") || "").trim().toLowerCase();
+    if (q.length < 2) return json({ error: "query too short", code: "query_too_short", hint: "use ?q= with at least two characters" }, 400);
+    const hits = graphSearch(ledger, q);
+    return json({ q, count: hits.length, nodes: hits });
+  }
+  if (p === "/api/graph/node") {
+    const id = u.searchParams.get("id") || "";
+    const n = graphNode(ledger, id);
+    return n.nodes.length ? json(n) : json({ error: "not_found", code: "node_not_found", hint: "ids look like finding:ego-depletion or paper:10.1037/..." }, 404);
+  }
   if (p === "/api/rubric") return json({ kinds: KINDS, outcomes: OUTCOMES, standings: STANDINGS, rubric: RUBRIC });
   if (p === "/api/findings") {
     const field = u.searchParams.get("field");
@@ -48,6 +62,7 @@ export function route(url, ledger = seed, live = { checks: {}, beats: [], change
   if (p === "/rubric") return html(rubricPage());
   if (p === "/projects") return html(projectsPage(ledger.projects || []));
   if (p === "/changes") return html(changesPage(live.changes, live.beats, ledger));
+  if (p === "/graph") return html(graphPage(graphReport(ledger, live.kg_leads || [])));
   if (p.startsWith("/field/")) { const id = p.slice(7); return FIELDS[id] && all.some(f => f.field === id) ? html(fieldPage(id, all)) : html(notFound(), 404); }
   if (p.startsWith("/f/")) { const f = all.find(x => x.id === p.slice(3)); return f ? html(findingPage(f, live)) : html(notFound(), 404); }
   return html(notFound(), 404);
