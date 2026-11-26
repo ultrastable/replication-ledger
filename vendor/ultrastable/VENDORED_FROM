@@ -1,5 +1,5 @@
-ultrastable/ultrastable@23e3980cb7c492fa9b681a599c4084fbfaf317d1
-seed/worker/src/contract.js -> vendor/ultrastable/contract.js sha256:47e546192a82f1d54da82a7057ae7e85396499a76fde866626d5eb81c855b936
+ultrastable/ultrastable@78460f19c6b49940136f6f36bef7b417d9043023
+seed/worker/src/contract.js -> vendor/ultrastable/contract.js sha256:7aa41668f26c4193ce36f6b533e85aae4d9764a35793542cd8dbd6a4dece06bf
 workers/core/datagraph/index.js -> vendor/ultrastable/datagraph.js sha256:a22d4233a5ff5af7f379f97ad94e47a4b1547cf419eaee60895752426a08870c
 seed/worker/src/promoqueue.js -> vendor/ultrastable/promoqueue.js sha256:da10b90d8d560a2e9195a4c4c637b7ca8a7ff0c52a3ac7a2a4a29eda864eba89
 doctrine/tenant-standard.json -> vendor/ultrastable/tenant-standard.json sha256:773ce9a337b70996d18ac2ec3fff142393b4246efb792f70ae6f794e546b7c2b
