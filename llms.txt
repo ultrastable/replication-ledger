@@ -1,0 +1,28 @@
+# Replication Ledger
+
+> Replication Ledger: which landmark findings held up and which failed, across many fields, updated as replications publish.
+
+Every week the beat searches OpenAlex and Crossref for new replications, reanalyses and retractions of each finding, files candidates under a verbatim-quote guard, recomputes every standing and logs each move with the paper that moved it, with no person in the middle
+
+## Live
+
+- [Replication Ledger](https://replication-ledger.ultrastable.org/): the running system
+- [Health report](https://replication-ledger.ultrastable.org/health): the result of its last tick
+- [Statements](https://replication-ledger.ultrastable.org/claims.json): what it states, and the endpoint behind each statement
+- [llms.txt](https://replication-ledger.ultrastable.org/llms.txt): the index the running system serves, with every route it answers
+
+## Start here
+
+- [README.md](README.md): what it is, where it runs and how it runs
+- [AGENTS.md](AGENTS.md): instructions for any coding agent
+- [IDEA.md](IDEA.md): the one file a person writes
+- [ultrastable.json](ultrastable.json): the manifest this file, the README blocks, CITATION.cff, publiccode.yml and codemeta.json are rendered from
+- [codemeta.json](codemeta.json): software metadata (CodeMeta 3.0)
+
+## Optional
+
+- [Source](https://github.com/ultrastable/replication-ledger): the repository
+- [LICENSE](LICENSE): the licence, LicenseRef-Ultrastable-USL-1.0
+- [CONTRIBUTING.md](CONTRIBUTING.md): how work is contributed
+- [SECURITY.md](SECURITY.md): how to report a vulnerability
+- [CHANGELOG.md](CHANGELOG.md): what changed, release by release
