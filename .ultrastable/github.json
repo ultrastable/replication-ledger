@@ -1,0 +1,21 @@
+{
+ "repo": "ultrastable/replication-ledger",
+ "description": "Replication Ledger: which landmark findings held up and which failed, across many fields, updated as replications publish.",
+ "homepage": "https://replication-ledger.ultrastable.org",
+ "topics": [
+  "autonomous-system",
+  "cloudflare-workers",
+  "ultrastable"
+ ],
+ "settings": {
+  "has_wiki": false,
+  "allow_squash_merge": true,
+  "allow_merge_commit": false,
+  "allow_rebase_merge": false,
+  "allow_auto_merge": true,
+  "allow_update_branch": true,
+  "delete_branch_on_merge": true,
+  "private": false,
+  "is_template": false
+ }
+}

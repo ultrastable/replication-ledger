@@ -5,7 +5,6 @@
   "summary": "Replication Ledger: which landmark findings held up and which failed, across many fields, updated as replications publish.",
   "repo": "ultrastable/replication-ledger",
   "public_url": "https://replication-ledger.ultrastable.org",
-  "planned_url": null,
   "license": "LicenseRef-Ultrastable-USL-1.0",
   "topics": [
    "autonomous-system",
@@ -13,12 +12,21 @@
    "ultrastable"
   ],
   "layer": "tenant",
-  "runs_as": {
-   "platform": "cloudflare-workers",
-   "worker": "ultrastable-replication-ledger",
-   "deployed": true,
-   "deployed_from": "main",
-   "deployed_by": "ultrastable/ultrastable deploy-ultrastable"
-  }
+  "runs_as": [
+   {
+    "provider": "cloudflare",
+    "kind": "worker",
+    "name": "ultrastable-replication-ledger",
+    "routes": [
+     "replication-ledger.ultrastable.org"
+    ],
+    "how": "deployed from this repository's `main` by the Ultrastable platform"
+   }
+  ],
+  "parent": "ultrastable/ultrastable",
+  "status": "live",
+  "visibility": "public",
+  "visibility_reason": "DISCOVER-1: public by default",
+  "loop": "Every week the beat searches OpenAlex and Crossref for new replications, reanalyses and retractions of each finding, files candidates under a verbatim-quote guard, recomputes every standing and logs each move with the paper that moved it, with no person in the middle"
  }
 }

@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+type: software
+authors:
+  - name: "Rowan Brad Quni-Gudzinas"
+title: "Replication Ledger"
+abstract: "Replication Ledger: which landmark findings held up and which failed, across many fields, updated as replications publish."
+repository-code: "https://github.com/ultrastable/replication-ledger"
+license-url: "https://github.com/ultrastable/replication-ledger/blob/main/LICENSE"
+url: "https://replication-ledger.ultrastable.org"
